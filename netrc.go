@@ -277,15 +277,42 @@ func (m *Machine) Set(name, value string) {
 		}
 		i = i + 4
 	}
+	indent := detectIndent(m.tokens)
+	separator := "\n" + indent
 	if n := len(m.tokens); n > 0 {
 		last := m.tokens[n-1]
-		if !strings.HasSuffix(last, "  ") {
+		if !strings.HasSuffix(last, separator) {
 			if strings.HasSuffix(last, "\n") {
-				m.tokens[n-1] = last + "  "
+				m.tokens[n-1] = last + indent
 			} else {
-				m.tokens[n-1] = last + "\n  "
+				m.tokens = append(m.tokens, separator)
 			}
 		}
 	}
 	m.tokens = append(m.tokens, name, " ", value, "\n")
+}
+
+// detectIndent returns the indent string used after newlines in the given
+// tokens. It looks for the substring after the last "\n" in any token; if
+// that substring is non-empty and entirely whitespace, it's treated as the
+// file's indent style. Falls back to two spaces when nothing is detected.
+func detectIndent(tokens []string) string {
+	for _, tok := range tokens {
+		idx := strings.LastIndex(tok, "\n")
+		if idx < 0 || idx == len(tok)-1 {
+			continue
+		}
+		candidate := tok[idx+1:]
+		allWhitespace := true
+		for _, r := range candidate {
+			if !unicode.IsSpace(r) {
+				allWhitespace = false
+				break
+			}
+		}
+		if allWhitespace {
+			return candidate
+		}
+	}
+	return "  "
 }

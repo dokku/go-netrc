@@ -127,6 +127,35 @@ func (s *NetrcSuite) TestAddToParseStringWithoutTrailingNewline(c *C) {
 		"machine example2.com\n  login hello\n  password world\n")
 }
 
+func (s *NetrcSuite) TestSetNewPropertyOnNewlineless(c *C) {
+	f, err := netrc.ParseString("machine m\nlogin l\npassword p")
+	c.Assert(err, IsNil)
+	m := f.Machine("m")
+	m.Set("account", "acct")
+	c.Check(m.Get("login"), Equals, "l")
+	c.Check(m.Get("password"), Equals, "p")
+	c.Check(m.Get("account"), Equals, "acct")
+	c.Check(f.Render(), Equals, "machine m\nlogin l\npassword p\n  account acct\n")
+}
+
+func (s *NetrcSuite) TestSetPreservesTabIndent(c *C) {
+	f, err := netrc.ParseString("machine m\n\tlogin l\n\tpassword p\n")
+	c.Assert(err, IsNil)
+	m := f.Machine("m")
+	m.Set("account", "acct")
+	c.Check(m.Get("account"), Equals, "acct")
+	c.Check(f.Render(), Equals, "machine m\n\tlogin l\n\tpassword p\n\taccount acct\n")
+}
+
+func (s *NetrcSuite) TestSetPreservesFourSpaceIndent(c *C) {
+	f, err := netrc.ParseString("machine m\n    login l\n    password p\n")
+	c.Assert(err, IsNil)
+	m := f.Machine("m")
+	m.Set("account", "acct")
+	c.Check(m.Get("account"), Equals, "acct")
+	c.Check(f.Render(), Equals, "machine m\n    login l\n    password p\n    account acct\n")
+}
+
 func (s *NetrcSuite) TestBadDefaultOrder(c *C) {
 	f, err := netrc.Parse("./examples/bad_default_order.netrc")
 	c.Assert(err, IsNil)
