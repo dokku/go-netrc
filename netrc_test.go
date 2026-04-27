@@ -164,6 +164,64 @@ func (s *NetrcSuite) TestPermissive(c *C) {
 	c.Check(f.Render(), Equals, string(body))
 }
 
+func (s *NetrcSuite) TestPasswordWithSpaces(c *C) {
+	f, err := netrc.Parse("./examples/spaces.netrc")
+	c.Assert(err, IsNil)
+	m := f.Machine("spaces.example.com")
+	c.Check(m.Get("login"), Equals, "alice")
+	c.Check(m.Get("password"), Equals, "my pass with spaces")
+	body, _ := ioutil.ReadFile(f.Path)
+	c.Check(f.Render(), Equals, string(body))
+}
+
+func (s *NetrcSuite) TestPasswordWithEscapes(c *C) {
+	f, err := netrc.Parse("./examples/escaped.netrc")
+	c.Assert(err, IsNil)
+	m := f.Machine("escaped.example.com")
+	c.Check(m.Get("login"), Equals, "alice")
+	c.Check(m.Get("password"), Equals, "say \"hi\"\nthere")
+	body, _ := ioutil.ReadFile(f.Path)
+	c.Check(f.Render(), Equals, string(body))
+}
+
+func (s *NetrcSuite) TestSetPasswordWithSpaces(c *C) {
+	f, err := netrc.Parse("./examples/login.netrc")
+	c.Assert(err, IsNil)
+	heroku := f.Machine("api.heroku.com")
+	heroku.Set("password", "my new pass")
+	c.Check(heroku.Get("password"), Equals, "my new pass")
+	c.Check(f.Render(), Equals, "# this is my login netrc\nmachine api.heroku.com\n  login jeff@heroku.com # this is my username\n  password \"my new pass\"\n")
+}
+
+func (s *NetrcSuite) TestSetPasswordWithQuoteAndNewline(c *C) {
+	dir := c.MkDir()
+	n := netrc.New(filepath.Join(dir, ".netrc"))
+	n.AddMachine("m", "alice", "ab\"c\nd")
+	rendered := n.Render()
+	c.Check(rendered, Equals, "machine m\n  login alice\n  password \"ab\\\"c\\nd\"\n")
+	round, err := netrc.ParseString(rendered)
+	c.Assert(err, IsNil)
+	c.Check(round.Machine("m").Get("password"), Equals, "ab\"c\nd")
+}
+
+func (s *NetrcSuite) TestSetPasswordNoQuoteWhenSafe(c *C) {
+	f, err := netrc.Parse("./examples/login.netrc")
+	c.Assert(err, IsNil)
+	heroku := f.Machine("api.heroku.com")
+	heroku.Set("password", "plain")
+	c.Check(f.Render(), Equals, "# this is my login netrc\nmachine api.heroku.com\n  login jeff@heroku.com # this is my username\n  password plain\n")
+}
+
+func (s *NetrcSuite) TestAddMachineWithSpaces(c *C) {
+	dir := c.MkDir()
+	n := netrc.New(filepath.Join(dir, ".netrc"))
+	n.AddMachine("m", "user", "pass with spaces")
+	round, err := netrc.ParseString(n.Render())
+	c.Assert(err, IsNil)
+	c.Check(round.Machine("m").Get("login"), Equals, "user")
+	c.Check(round.Machine("m").Get("password"), Equals, "pass with spaces")
+}
+
 func (s *NetrcSuite) TestParseString(c *C) {
 	file, err := os.Open("./examples/good.netrc")
 	defer file.Close()

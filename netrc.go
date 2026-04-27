@@ -87,7 +87,7 @@ func (n *Netrc) AddMachine(name, login, password string) {
 		n.machines = append(n.machines, machine)
 	}
 	machine.Name = name
-	machine.tokens = []string{"machine ", name, "\n"}
+	machine.tokens = []string{"machine ", quoteIfNeeded(name), "\n"}
 	machine.Set("login", login)
 	machine.Set("password", password)
 }
@@ -163,6 +163,21 @@ func lex(file io.Reader) []string {
 		if eof && len(data) == 0 {
 			return 0, nil, nil
 		}
+		if data[0] == '"' {
+			for i := 1; i < len(data); i++ {
+				if data[i] == '\\' && i+1 < len(data) {
+					i++
+					continue
+				}
+				if data[i] == '"' {
+					return i + 1, data[:i+1], nil
+				}
+			}
+			if eof {
+				return len(data), data, nil
+			}
+			return 0, nil, nil
+		}
 		inWhitespace := unicode.IsSpace(rune(data[0]))
 		for i, c := range data {
 			if c == '#' {
@@ -218,7 +233,7 @@ func parse(tokens []string) (*Netrc, error) {
 				machine.IsDefault = true
 				machine.Name = "default"
 			} else {
-				machine.Name = tokens[i+2]
+				machine.Name = unquote(tokens[i+2])
 			}
 		}
 		if machine == nil {
@@ -241,24 +256,99 @@ func (m *Machine) Get(name string) string {
 			return ""
 		}
 		if m.tokens[i] == name {
-			return m.tokens[i+2]
+			return unquote(m.tokens[i+2])
 		}
 		i = i + 4
 	}
 }
 
+// unquote decodes a possibly-quoted netrc value. A quoted value is wrapped in
+// double quotes and may contain the escapes \", \\, \n, \r, \t. Unrecognized
+// escapes drop the backslash. A bare value is returned unchanged.
+func unquote(value string) string {
+	if len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
+		return value
+	}
+	inner := value[1 : len(value)-1]
+	var b strings.Builder
+	b.Grow(len(inner))
+	for i := 0; i < len(inner); i++ {
+		c := inner[i]
+		if c != '\\' || i+1 >= len(inner) {
+			b.WriteByte(c)
+			continue
+		}
+		i++
+		switch inner[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 'r':
+			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case '"', '\\':
+			b.WriteByte(inner[i])
+		default:
+			b.WriteByte(inner[i])
+		}
+	}
+	return b.String()
+}
+
 // Set a property on the machine
 func (m *Machine) Set(name, value string) {
+	encoded := quoteIfNeeded(value)
 	i := 4
 	if m.IsDefault {
 		i = 2
 	}
 	for i+2 < len(m.tokens) {
 		if m.tokens[i] == name {
-			m.tokens[i+2] = value
+			m.tokens[i+2] = encoded
 			return
 		}
 		i = i + 4
 	}
-	m.tokens = append(m.tokens, "  ", name, " ", value, "\n")
+	m.tokens = append(m.tokens, "  ", name, " ", encoded, "\n")
+}
+
+// quoteIfNeeded returns value as a netrc token. Values containing whitespace,
+// double quotes, or backslashes are wrapped in double quotes and escaped using
+// curl-compatible escapes (\", \\, \n, \r, \t). Other values pass through
+// unchanged so files with simple credentials round-trip byte-for-byte.
+func quoteIfNeeded(value string) string {
+	if !needsQuoting(value) {
+		return value
+	}
+	var b strings.Builder
+	b.Grow(len(value) + 2)
+	b.WriteByte('"')
+	for i := 0; i < len(value); i++ {
+		switch c := value[i]; c {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+func needsQuoting(value string) bool {
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case ' ', '\t', '\n', '\r', '"', '\\':
+			return true
+		}
+	}
+	return false
 }
