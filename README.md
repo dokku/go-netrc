@@ -33,10 +33,11 @@ machine example.com
 ```
 
 The following escape sequences are supported inside a quoted value: `\"`, `\\`,
-`\n`, `\r`, `\t`. `Get` returns the decoded value, so callers see plain
-strings. `Set` and `AddMachine` automatically quote and escape the value when
-needed; values without whitespace or special characters are written bare so
-existing files round-trip unchanged.
+`\n`, `\r`, `\t`. Any other `\x` is preserved literally on decode so
+hand-edited values are never silently corrupted. `Get` returns the decoded
+value, so callers see plain strings. `Set` and `AddMachine` automatically
+quote and escape the value when needed; values without whitespace or special
+characters are written bare so existing files round-trip unchanged.
 
 This matches the quoting syntax adopted by curl 7.84+. Older `.netrc` parsers
 may not recognize quoted values, so portability across tools varies.

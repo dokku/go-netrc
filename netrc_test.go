@@ -216,6 +216,8 @@ func (s *NetrcSuite) TestAddMachineWithSpaces(c *C) {
 	dir := c.MkDir()
 	n := netrc.New(filepath.Join(dir, ".netrc"))
 	n.AddMachine("m", "user", "pass with spaces")
+	c.Check(n.Machine("m").Get("login"), Equals, "user")
+	c.Check(n.Machine("m").Get("password"), Equals, "pass with spaces")
 	round, err := netrc.ParseString(n.Render())
 	c.Assert(err, IsNil)
 	c.Check(round.Machine("m").Get("login"), Equals, "user")

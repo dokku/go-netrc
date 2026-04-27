@@ -87,7 +87,7 @@ func (n *Netrc) AddMachine(name, login, password string) {
 		n.machines = append(n.machines, machine)
 	}
 	machine.Name = name
-	machine.tokens = []string{"machine ", quoteIfNeeded(name), "\n"}
+	machine.tokens = []string{"machine", " ", quoteIfNeeded(name), "\n"}
 	machine.Set("login", login)
 	machine.Set("password", password)
 }
@@ -263,8 +263,10 @@ func (m *Machine) Get(name string) string {
 }
 
 // unquote decodes a possibly-quoted netrc value. A quoted value is wrapped in
-// double quotes and may contain the escapes \", \\, \n, \r, \t. Unrecognized
-// escapes drop the backslash. A bare value is returned unchanged.
+// double quotes and may contain the escapes \", \\, \n, \r, \t. For any other
+// \x sequence the backslash is preserved literally so hand-edited values like
+// "\q" round-trip as \q rather than being silently corrupted to q. A bare
+// value is returned unchanged.
 func unquote(value string) string {
 	if len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
 		return value
@@ -289,6 +291,7 @@ func unquote(value string) string {
 		case '"', '\\':
 			b.WriteByte(inner[i])
 		default:
+			b.WriteByte('\\')
 			b.WriteByte(inner[i])
 		}
 	}
@@ -309,7 +312,13 @@ func (m *Machine) Set(name, value string) {
 		}
 		i = i + 4
 	}
-	m.tokens = append(m.tokens, "  ", name, " ", encoded, "\n")
+	// Property not present: extend the previous trailing whitespace with the
+	// indent for the new entry so the appended block lands at the next stride
+	// boundary that Get expects.
+	if n := len(m.tokens); n > 0 && strings.HasSuffix(m.tokens[n-1], "\n") {
+		m.tokens[n-1] += "  "
+	}
+	m.tokens = append(m.tokens, name, " ", encoded, "\n")
 }
 
 // quoteIfNeeded returns value as a netrc token. Values containing whitespace,
@@ -321,7 +330,7 @@ func quoteIfNeeded(value string) string {
 		return value
 	}
 	var b strings.Builder
-	b.Grow(len(value) + 2)
+	b.Grow(2*len(value) + 2)
 	b.WriteByte('"')
 	for i := 0; i < len(value); i++ {
 		switch c := value[i]; c {
