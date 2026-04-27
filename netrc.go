@@ -83,13 +83,30 @@ func (n *Netrc) Machine(name string) *Machine {
 func (n *Netrc) AddMachine(name, login, password string) {
 	machine := n.Machine(name)
 	if machine == nil {
+		n.ensureTrailingNewline()
 		machine = &Machine{}
 		n.machines = append(n.machines, machine)
 	}
 	machine.Name = name
-	machine.tokens = []string{"machine ", name, "\n"}
+	machine.tokens = []string{"machine", " ", name, "\n"}
 	machine.Set("login", login)
 	machine.Set("password", password)
+}
+
+// ensureTrailingNewline guarantees the most recent token ends with "\n"
+// so that a newly appended machine starts on its own line.
+func (n *Netrc) ensureTrailingNewline() {
+	tokens := &n.tokens
+	if len(n.machines) > 0 {
+		tokens = &n.machines[len(n.machines)-1].tokens
+	}
+	if len(*tokens) == 0 {
+		return
+	}
+	last := (*tokens)[len(*tokens)-1]
+	if !strings.HasSuffix(last, "\n") {
+		*tokens = append(*tokens, "\n")
+	}
 }
 
 // RemoveMachine remove a machine
@@ -260,5 +277,15 @@ func (m *Machine) Set(name, value string) {
 		}
 		i = i + 4
 	}
-	m.tokens = append(m.tokens, "  ", name, " ", value, "\n")
+	if n := len(m.tokens); n > 0 {
+		last := m.tokens[n-1]
+		if !strings.HasSuffix(last, "  ") {
+			if strings.HasSuffix(last, "\n") {
+				m.tokens[n-1] = last + "  "
+			} else {
+				m.tokens[n-1] = last + "\n  "
+			}
+		}
+	}
+	m.tokens = append(m.tokens, name, " ", value, "\n")
 }

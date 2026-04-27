@@ -108,6 +108,25 @@ func (s *NetrcSuite) TestNewlineless(c *C) {
 	c.Check(f.Render(), Equals, string(body))
 }
 
+func (s *NetrcSuite) TestAddToNewlineless(c *C) {
+	f, err := netrc.Parse("./examples/newlineless.netrc")
+	c.Assert(err, IsNil)
+	f.AddMachine("m2", "l2", "p2")
+	c.Check(f.Render(), Equals, "# this is my netrc\nmachine m\n  login l # this is my username\n  password p\n"+
+		"machine m2\n  login l2\n  password p2\n")
+	c.Check(f.Machine("m").Get("password"), Equals, "p")
+	c.Check(f.Machine("m2").Get("password"), Equals, "p2")
+}
+
+func (s *NetrcSuite) TestAddToParseStringWithoutTrailingNewline(c *C) {
+	sample := "machine example.com\nlogin user\npassword pass"
+	f, err := netrc.ParseString(sample)
+	c.Assert(err, IsNil)
+	f.AddMachine("example2.com", "hello", "world")
+	c.Check(f.Render(), Equals, "machine example.com\nlogin user\npassword pass\n"+
+		"machine example2.com\n  login hello\n  password world\n")
+}
+
 func (s *NetrcSuite) TestBadDefaultOrder(c *C) {
 	f, err := netrc.Parse("./examples/bad_default_order.netrc")
 	c.Assert(err, IsNil)
