@@ -252,19 +252,33 @@ func (m *Machine) Set(name, value string) {
 }
 
 // isWhitespaceOrComment reports whether a token contributes only formatting,
-// either pure whitespace or a comment. Tokens whose first non-whitespace
-// rune is '#' are comments; value tokens that contain '#' mid-string (e.g.
-// "foo#bar") return false because their first rune is non-whitespace.
+// either pure whitespace or a lexer-produced comment. Lexer comment tokens
+// always have leading whitespace (trailing comment) or contain a newline
+// (leading comment terminated by newline). Programmatic value tokens whose
+// first rune is '#' (e.g. a password set to "#secret") have neither, so they
+// are not classified as comments.
 func isWhitespaceOrComment(s string) bool {
-	for _, r := range s {
-		if r == '#' {
-			return true
+	if s == "" {
+		return true
+	}
+	hashIdx := strings.IndexByte(s, '#')
+	if hashIdx == -1 {
+		for _, r := range s {
+			if !unicode.IsSpace(r) {
+				return false
+			}
 		}
+		return true
+	}
+	for _, r := range s[:hashIdx] {
 		if !unicode.IsSpace(r) {
 			return false
 		}
 	}
-	return true
+	if hashIdx > 0 {
+		return true
+	}
+	return strings.ContainsRune(s, '\n')
 }
 
 // findKey returns the index in m.tokens of the property key matching name,

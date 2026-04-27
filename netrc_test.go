@@ -194,6 +194,17 @@ func (s *NetrcSuite) TestTrailingCommentSet(c *C) {
 	c.Check(strings.Contains(f.Render(), "# this is my username"), Equals, true)
 }
 
+func (s *NetrcSuite) TestSetHashLeadingValue(c *C) {
+	f, err := netrc.Parse("./examples/login.netrc")
+	c.Assert(err, IsNil)
+	m := f.Machine("api.heroku.com")
+	m.Set("password", "#secret")
+	c.Check(m.Get("password"), Equals, "#secret")
+	m.Set("password", "#another")
+	c.Check(m.Get("password"), Equals, "#another")
+	c.Check(strings.Count(f.Render(), "password"), Equals, 1)
+}
+
 func (s *NetrcSuite) TestParseString(c *C) {
 	file, err := os.Open("./examples/good.netrc")
 	defer file.Close()
