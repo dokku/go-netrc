@@ -182,8 +182,9 @@ func (s *NetrcSuite) TestSetWithCommentLines(c *C) {
 	f.Machine("m").Set("password", "newpw")
 	c.Check(f.Machine("m").Get("password"), Equals, "newpw")
 	rendered := f.Render()
-	c.Check(strings.Contains(rendered, "# comment before any property"), Equals, true)
-	c.Check(strings.Contains(rendered, "# comment between properties"), Equals, true)
+	c.Check(rendered, Equals, "# top of file comment\nmachine m\n  # comment before any property\n  login l\n  # comment between properties\n  password newpw\nmachine n\n  login ln\n  # comment between properties\n  password pn\n")
+	c.Check(strings.Count(rendered, "password"), Equals, 2)
+	c.Check(strings.Count(rendered, "password newpw"), Equals, 1)
 }
 
 func (s *NetrcSuite) TestTrailingCommentSet(c *C) {
