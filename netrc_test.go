@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jdx/go-netrc"
@@ -162,6 +163,35 @@ func (s *NetrcSuite) TestPermissive(c *C) {
 	c.Check(f.Machine("m").Get("password"), Equals, "p")
 	body, _ := ioutil.ReadFile(f.Path)
 	c.Check(f.Render(), Equals, string(body))
+}
+
+func (s *NetrcSuite) TestCommentLines(c *C) {
+	f, err := netrc.Parse("./examples/comments.netrc")
+	c.Assert(err, IsNil)
+	c.Check(f.Machine("m").Get("login"), Equals, "l")
+	c.Check(f.Machine("m").Get("password"), Equals, "p")
+	c.Check(f.Machine("n").Get("login"), Equals, "ln")
+	c.Check(f.Machine("n").Get("password"), Equals, "pn")
+	body, _ := ioutil.ReadFile(f.Path)
+	c.Check(f.Render(), Equals, string(body))
+}
+
+func (s *NetrcSuite) TestSetWithCommentLines(c *C) {
+	f, err := netrc.Parse("./examples/comments.netrc")
+	c.Assert(err, IsNil)
+	f.Machine("m").Set("password", "newpw")
+	c.Check(f.Machine("m").Get("password"), Equals, "newpw")
+	rendered := f.Render()
+	c.Check(strings.Contains(rendered, "# comment before any property"), Equals, true)
+	c.Check(strings.Contains(rendered, "# comment between properties"), Equals, true)
+}
+
+func (s *NetrcSuite) TestTrailingCommentSet(c *C) {
+	f, err := netrc.Parse("./examples/login.netrc")
+	c.Assert(err, IsNil)
+	f.Machine("api.heroku.com").Set("login", "newuser")
+	c.Check(f.Machine("api.heroku.com").Get("login"), Equals, "newuser")
+	c.Check(strings.Contains(f.Render(), "# this is my username"), Equals, true)
 }
 
 func (s *NetrcSuite) TestParseString(c *C) {

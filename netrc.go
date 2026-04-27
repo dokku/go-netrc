@@ -232,33 +232,82 @@ func parse(tokens []string) (*Netrc, error) {
 
 // Get a property from a machine
 func (m *Machine) Get(name string) string {
-	i := 4
-	if m.IsDefault {
-		i = 2
-	}
-	for {
-		if i+2 >= len(m.tokens) {
-			return ""
+	if k := m.findKey(name); k != -1 {
+		if v := m.findValueAfter(k); v != -1 {
+			return m.tokens[v]
 		}
-		if m.tokens[i] == name {
-			return m.tokens[i+2]
-		}
-		i = i + 4
 	}
+	return ""
 }
 
 // Set a property on the machine
 func (m *Machine) Set(name, value string) {
-	i := 4
-	if m.IsDefault {
-		i = 2
-	}
-	for i+2 < len(m.tokens) {
-		if m.tokens[i] == name {
-			m.tokens[i+2] = value
+	if k := m.findKey(name); k != -1 {
+		if v := m.findValueAfter(k); v != -1 {
+			m.tokens[v] = value
 			return
 		}
-		i = i + 4
 	}
 	m.tokens = append(m.tokens, "  ", name, " ", value, "\n")
+}
+
+// isWhitespaceOrComment reports whether a token contributes only formatting,
+// either pure whitespace or a comment. Tokens whose first non-whitespace
+// rune is '#' are comments; value tokens that contain '#' mid-string (e.g.
+// "foo#bar") return false because their first rune is non-whitespace.
+func isWhitespaceOrComment(s string) bool {
+	for _, r := range s {
+		if r == '#' {
+			return true
+		}
+		if !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// findKey returns the index in m.tokens of the property key matching name,
+// or -1 if not present. It skips the machine declaration ("machine <name>"
+// or "default") and any whitespace-or-comment tokens that may appear
+// between properties.
+func (m *Machine) findKey(name string) int {
+	skip := 2
+	if m.IsDefault {
+		skip = 1
+	}
+	start := len(m.tokens)
+	seen := 0
+	for i, t := range m.tokens {
+		if isWhitespaceOrComment(t) {
+			continue
+		}
+		seen++
+		if seen == skip {
+			start = i + 1
+			break
+		}
+	}
+	expectKey := true
+	for i := start; i < len(m.tokens); i++ {
+		if isWhitespaceOrComment(m.tokens[i]) {
+			continue
+		}
+		if expectKey && m.tokens[i] == name {
+			return i
+		}
+		expectKey = !expectKey
+	}
+	return -1
+}
+
+// findValueAfter returns the index of the value token that follows the key
+// at index k, skipping whitespace-or-comment tokens, or -1 if none.
+func (m *Machine) findValueAfter(k int) int {
+	for j := k + 1; j < len(m.tokens); j++ {
+		if !isWhitespaceOrComment(m.tokens[j]) {
+			return j
+		}
+	}
+	return -1
 }
